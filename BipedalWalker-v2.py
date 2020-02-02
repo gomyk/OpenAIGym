@@ -27,31 +27,31 @@ import CriticNet
 from matplotlib import animation
 
 env = gym.make("BipedalWalker-v2")
-# env._max_episode_steps = 1600
+env._max_episode_steps = 1000
 
 # GPU를 사용할 경우
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
+print(device)
 env.reset()
 
-BATCH_SIZE = 128
+BATCH_SIZE = 100
 GAMMA = 0.99
 EPS_START = 0.00
 EPS_END = 0.00
 EPS_DECAY = 2000
 WEIGHT_DECAY = 0.001
-TARGET_UPDATE = 10
+TARGET_UPDATE = 5
 ACTOR_LR = 0.0001
 CRITIC_LR = 0.001
 MEMORY_SIZE = 1000000
-EPISODE_SIZE = 1000
+EPISODE_SIZE = 10000
 TAU = 0.001
 ou_noise_theta = 0.4
 ou_noise_sigma = 0.2
 
+REWARD_WEIGHT = 1.0
 RECORD_INTERVAL = 100
-
-seed = random.seed(0)
+RENDER_INTERVAL = 1
 
 # gym 행동 공간에서 행동의 숫자를 얻습니다.
 # n_actions = env.action_space.n
@@ -86,7 +86,6 @@ steps_done = 0
 def select_action(state, steps_done=None):
     # state = torch.from_numpy(state).float().unsqueeze(0).to(device)
     sample = random.random()
-    steps_done += 1
     eps_threshold = EPS_END + (EPS_START - EPS_END) * \
                     math.exp(-1. * steps_done / EPS_DECAY)
     state = torch.FloatTensor(state).unsqueeze(0)
@@ -102,8 +101,8 @@ def select_action(state, steps_done=None):
 
     _noise = noise.sample()
     actor.train()
-    for action in selected_action:
-        action = np.clip(action + _noise, -1.0, 1.0)
+    for act in selected_action:
+        act = np.clip(act + _noise, -1.0, 1.0)
     return selected_action
 
 
@@ -189,16 +188,19 @@ for i_episode in range(EPISODE_SIZE):
     total_action_count = [0, 0, 0]
 
     for t in count():
-        frame = env.render(mode="rgb_array")
-        if i_episode % RECORD_INTERVAL == 0:
-            frames.append(frame)
+        if i_episode % RENDER_INTERVAL == 0:
+            frame = env.render(mode="rgb_array")
+            if i_episode % RECORD_INTERVAL == 0:
+                frames.append(frame)
         # 행동 선택과 수행
         action = select_action(obv, steps_done)
+        steps_done += 1
         next_obv, reward, done, _ = env.step(action)
         if reward > top_reward:
             top_reward = reward
         total_reward += reward
-
+        #reward -= 0.01
+        reward = REWARD_WEIGHT * reward
         # 메모리에 변이 저장
         assert obv is not None
         memory.store(obv, action, reward, next_obv, done)
@@ -229,15 +231,14 @@ for i_episode in range(EPISODE_SIZE):
             total_action_count = [0, 0, 0]
             break
     # 목표 네트워크 업데이트, 모든 웨이트와 바이어스 복사
-    # if i_episode % TARGET_UPDATE == 0:
-    #   actor_target.load_state_dict(actor.state_dict())
-    #   critic_target.load_state_dict(critic.state_dict())
+    #if i_episode % TARGET_UPDATE == 0:
+         #target_soft_update()
 print('Complete')
 env.close()
 plt.show()
 
 # Imports specifically so we can render outputs in Colab.
-plt.rcParams['animation.ffmpeg_path'] = r'C:\Users\gomyk\PycharmProjects\OpenAIGym\ffmpeg\bin\ffmpeg.exe'
+plt.rcParams['animation.ffmpeg_path'] = r'C:\ffmpeg\bin\ffmpeg.exe'
 fig = plt.figure()
 
 

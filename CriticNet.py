@@ -4,9 +4,9 @@ import torch.optim as optim
 import torch.nn.functional as F
 import torchvision.transforms as T
 
-HIDDEN_512 = 512
-HIDDEN_256 = 256
-HIDDEN_128 = 128
+HIDDEN_512 = 600
+HIDDEN_256 = 300
+HIDDEN_128 = 150
 
 
 class Critic(nn.Module):
@@ -14,7 +14,7 @@ class Critic(nn.Module):
     def __init__(self, obs_size, action_size, init_w: float = 3e-3, ):
         super(Critic, self).__init__()
 
-        self.seed = torch.manual_seed(0)
+        # self.seed = torch.manual_seed(0)
 
         self.linear = nn.Linear(obs_size, HIDDEN_512)
         self.linear2 = nn.Linear(HIDDEN_512, HIDDEN_256)

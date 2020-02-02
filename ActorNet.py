@@ -4,9 +4,9 @@ import torch.optim as optim
 import torch.nn.functional as F
 import torchvision.transforms as T
 
-HIDDEN_512 = 512
-HIDDEN_256 = 256
-HIDDEN_128 = 128
+HIDDEN_512 = 600
+HIDDEN_256 = 300
+HIDDEN_128 = 150
 
 
 class Actor(nn.Module):
