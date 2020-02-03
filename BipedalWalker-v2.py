@@ -15,7 +15,6 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
-import torchvision.transforms as T
 
 import base64
 
@@ -26,31 +25,32 @@ import CriticNet
 
 from matplotlib import animation
 
-env = gym.make("BipedalWalker-v2")
-env._max_episode_steps = 1000
+env = gym.make("LunarLanderContinuous-v2")
+#env._max_episode_steps = 1000
 
 # GPU를 사용할 경우
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+device = torch.device("cpu")
 print(device)
 env.reset()
 
 BATCH_SIZE = 100
 GAMMA = 0.99
-EPS_START = 0.00
-EPS_END = 0.00
+EPS_START = 0.90
+EPS_END = 0.05
 EPS_DECAY = 2000
-WEIGHT_DECAY = 0.001
+WEIGHT_DECAY = 0.01
 TARGET_UPDATE = 5
-ACTOR_LR = 0.0001
-CRITIC_LR = 0.001
-MEMORY_SIZE = 1000000
-EPISODE_SIZE = 10000
-TAU = 0.001
+ACTOR_LR = 0.01
+CRITIC_LR = 0.04
+MEMORY_SIZE = 100000
+EPISODE_SIZE = 300
+TAU = 0.005
 ou_noise_theta = 0.4
 ou_noise_sigma = 0.2
 
 REWARD_WEIGHT = 1.0
-RECORD_INTERVAL = 100
+RECORD_INTERVAL = 50
 RENDER_INTERVAL = 1
 
 # gym 행동 공간에서 행동의 숫자를 얻습니다.
@@ -83,15 +83,27 @@ noise = OUnoise.OUNoise(
 steps_done = 0
 
 
-def select_action(state, steps_done=None):
+def getEpsThreshold(step_done):
+    return EPS_END + (EPS_START - EPS_END) * \
+           math.exp(-1. * step_done / EPS_DECAY)
+
+def select_action(state, steps_done=None, eval=False):
     # state = torch.from_numpy(state).float().unsqueeze(0).to(device)
     sample = random.random()
-    eps_threshold = EPS_END + (EPS_START - EPS_END) * \
-                    math.exp(-1. * steps_done / EPS_DECAY)
+    eps_threshold = getEpsThreshold(steps_done)
     state = torch.FloatTensor(state).unsqueeze(0)
+    if eval:
+        return actor(
+            state.to(device)
+        )[0].detach().cpu().numpy()
     if sample < eps_threshold:
         # selected_action = [np.random.uniform(0,1),np.random.uniform(0,1),np.random.uniform(0,1)]
-        selected_action = np.random.uniform(-1, 1, n_actions)
+        # selected_action = np.random.uniform(-1, 1, n_actions)
+        actor.eval()
+        with torch.no_grad():
+            selected_action = actor(
+                state.to(device)
+            )[0].detach().cpu().numpy()
     else:
         actor.eval()
         with torch.no_grad():
@@ -99,8 +111,9 @@ def select_action(state, steps_done=None):
                 state.to(device)
             )[0].detach().cpu().numpy()
 
-    _noise = noise.sample()
+    _noise = noise.sample()*eps_threshold
     actor.train()
+
     for act in selected_action:
         act = np.clip(act + _noise, -1.0, 1.0)
     return selected_action
@@ -176,6 +189,17 @@ def optimize_model():
     return actor_loss.data, critic_loss.data
 
 
+def replay(env):
+    env.reset()
+    for t in count():
+        env.render(mode="rgb_array")
+        # 행동 선택과 수행
+        action = select_action(obv, eval=True)
+        next_obv, reward, done, _ = env.step(action)
+        if done:
+            break
+
+
 frames = []
 batch_count = 0
 for i_episode in range(EPISODE_SIZE):
@@ -199,7 +223,7 @@ for i_episode in range(EPISODE_SIZE):
         if reward > top_reward:
             top_reward = reward
         total_reward += reward
-        #reward -= 0.01
+        # reward -= 0.01
         reward = REWARD_WEIGHT * reward
         # 메모리에 변이 저장
         assert obv is not None
@@ -231,8 +255,8 @@ for i_episode in range(EPISODE_SIZE):
             total_action_count = [0, 0, 0]
             break
     # 목표 네트워크 업데이트, 모든 웨이트와 바이어스 복사
-    #if i_episode % TARGET_UPDATE == 0:
-         #target_soft_update()
+    # if i_episode % TARGET_UPDATE == 0:
+    # target_soft_update()
 print('Complete')
 env.close()
 plt.show()
